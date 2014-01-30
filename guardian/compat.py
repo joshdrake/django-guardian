@@ -4,6 +4,8 @@ from django.conf import settings
 from django.contrib.auth.models import Group
 from django.contrib.auth.models import Permission
 from django.contrib.auth.models import AnonymousUser
+from django.db.models import get_model
+
 
 try:
     from django.conf.urls import url, patterns, include, handler404, handler500
@@ -72,6 +74,38 @@ def get_user_permission_codename(perm):
     ``myapp.CustomUser`` is used it would return ``change_customuser``.
     """
     return get_user_permission_full_codename(perm).split('.')[1]
+
+# Django 1.7 compatibility utilities
+# initialization code that accesses models at import-time should be moved in to the ``ready`` method of an ``django.apps.AppConfig`` instance
+
+def setup_prototype_methods(app_config=None):
+    """
+    Sets up prototype methods on ``auth.User`` and ``auth.Group``.
+    Optionally takes an ``django.apps.AppConfig`` instance for 1.7+ compatibility; otherwise
+    falls back to ``get_model``. This function should be invoked in the ``ready`` method of a
+    ``django.apps.AppConfig`` instance in Django 1.7+, and cautiously at import-time otherwise.
+    """
+    from guardian.utils import get_anonymous_user # avoid circular import
+    User = get_user_model()
+
+    if app_config is None:
+        UserObjectPermission = get_model('guardian', 'UserObjectPermission')
+        GroupObjectPermission = get_model('guardian', 'GroupObjectPermission')
+    else:
+        UserObjectPermission = app_config.get_model('UserObjectPermission')
+        GroupObjectPermission = app_config.get_model('GroupObjectPermission')
+
+    # Prototype User and Group methods
+    setattr(User, 'get_anonymous', staticmethod(lambda: get_anonymous_user()))
+    setattr(User, 'add_obj_perm',
+        lambda self, perm, obj: UserObjectPermission.objects.assign_perm(perm, self, obj))
+    setattr(User, 'del_obj_perm',
+        lambda self, perm, obj: UserObjectPermission.objects.remove_perm(perm, self, obj))
+
+    setattr(Group, 'add_obj_perm',
+        lambda self, perm, obj: GroupObjectPermission.objects.assign_perm(perm, self, obj))
+    setattr(Group, 'del_obj_perm',
+        lambda self, perm, obj: GroupObjectPermission.objects.remove_perm(perm, self, obj))
 
 # Python 3
 try:

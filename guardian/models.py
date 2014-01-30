@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+import django
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import Group
@@ -11,7 +12,7 @@ from django.utils.translation import ugettext_lazy as _
 from guardian.compat import get_user_model
 from guardian.compat import user_model_label
 from guardian.compat import unicode
-from guardian.utils import get_anonymous_user
+from guardian.compat import setup_prototype_methods
 from guardian.managers import GroupObjectPermissionManager
 from guardian.managers import UserObjectPermissionManager
 
@@ -86,15 +87,7 @@ class GroupObjectPermission(GroupObjectPermissionBase, BaseGenericObjectPermissi
         unique_together = ['group', 'permission', 'object_pk']
 
 
-User = get_user_model()
-# Prototype User and Group methods
-setattr(User, 'get_anonymous', staticmethod(lambda: get_anonymous_user()))
-setattr(User, 'add_obj_perm',
-    lambda self, perm, obj: UserObjectPermission.objects.assign_perm(perm, self, obj))
-setattr(User, 'del_obj_perm',
-    lambda self, perm, obj: UserObjectPermission.objects.remove_perm(perm, self, obj))
-
-setattr(Group, 'add_obj_perm',
-    lambda self, perm, obj: GroupObjectPermission.objects.assign_perm(perm, self, obj))
-setattr(Group, 'del_obj_perm',
-    lambda self, perm, obj: GroupObjectPermission.objects.remove_perm(perm, self, obj))
+# if we're running on < Django 1.7, we need to set up the prototype methods now;
+# in 1.7+ environments, this will be handled in the guardian ``django.apps.AppConfig`` instance.
+if django.VERSION < (1, 7):
+    setup_prototype_methods()
